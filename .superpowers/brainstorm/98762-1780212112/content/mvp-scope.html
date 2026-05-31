@@ -1,0 +1,62 @@
+<h2>OmniBoard 第一阶段先做哪一块？</h2>
+<p class="subtitle">需求文档覆盖客户端、后端、公开网站三个系统。第一步建议先做一个可跑通的数据闭环，再扩展到完整跨平台。</p>
+
+<div class="cards">
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">A: 后端 + 公开看板</div>
+        <div class="mockup-body">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div class="placeholder">Axum API<br>Token + Timestamp<br>LWW Merge</div>
+            <div class="placeholder">Read-only Web Board<br>Auto Refresh<br>CDN-friendly</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A. 先打通云端展示闭环</h3>
+      <p>最快得到可部署成果：同步 API、公开 API、公开看板 UI。客户端先用测试 JSON 或脚本模拟同步。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">B: Flutter Local-first Client</div>
+        <div class="mockup-body">
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+            <div class="placeholder">待处理<br>Task Cards</div>
+            <div class="placeholder">进行中<br>Drag & Drop</div>
+            <div class="placeholder">已完成<br>Notes</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B. 先做本地客户端核心</h3>
+      <p>优先实现离线可用、拖拽、SQLite/Drift、dirty flag。云端同步和公开站后补。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">C: Monorepo MVP</div>
+        <div class="mockup-body">
+          <div style="display:grid;grid-template-columns:1.1fr .9fr 1fr;gap:8px">
+            <div class="placeholder">Client Stub<br>Local JSON</div>
+            <div class="placeholder">Rust API<br>SQLite/Postgres-ready</div>
+            <div class="placeholder">Public Board<br>Next/Nuxt</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C. 建 monorepo 骨架并做端到端薄切片</h3>
+      <p>一次搭好 backend、web、client 目录，每层只做最小功能，适合长期扩展但第一步稍慢。</p>
+    </div>
+  </div>
+</div>
+
+<p class="subtitle">我的推荐是 A：先让“同步到云端后公开可看”真实跑起来，再接 Flutter 客户端，风险最低也最容易验证。</p>

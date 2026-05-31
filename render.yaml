@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: omniboard-backend
+    runtime: image
+    repo: https://github.com/YOUR_USER/YOUR_REPO
+    dockerfilePath: ./backend/Dockerfile
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: SYNC_API_KEY
+        sync: false
+      - key: ALLOWED_WEB_ORIGIN
+        value: https://your-web-app.vercel.app,https://your-admin-app.vercel.app
+      - key: PUBLIC_CACHE_MAX_AGE_SECONDS
+        value: "60"
+      - key: PORT
+        value: "3000"
+      - key: RUST_LOG
+        value: omniboard_backend=info,tower_http=info
+    healthCheckPath: /health
