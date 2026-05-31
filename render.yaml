@@ -2,7 +2,7 @@ services:
   - type: web
     name: omniboard-backend
     runtime: docker
-    repo: https://github.com/YOUR_USER/YOUR_REPO
+    repo: https://github.com/mitsa-ng/OmniBoard
     dockerfilePath: ./Dockerfile
     envVars:
       - key: DATABASE_URL
@@ -10,7 +10,7 @@ services:
       - key: SYNC_API_KEY
         sync: false
       - key: ALLOWED_WEB_ORIGIN
-        value: https://your-web-app.vercel.app,https://your-admin-app.vercel.app
+        value: https://web-two-rosy-19.vercel.app,http://localhost:5174
       - key: PUBLIC_CACHE_MAX_AGE_SECONDS
         value: "60"
       - key: PORT
