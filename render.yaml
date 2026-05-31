@@ -10,7 +10,7 @@ services:
       - key: SYNC_API_KEY
         sync: false
       - key: ALLOWED_WEB_ORIGIN
-        value: https://omniboard-app.vercel.app,http://localhost:5174
+        value: https://omniboard-app.vercel.app,http://localhost:5174,https://tauri.localhost,tauri://localhost
       - key: PUBLIC_CACHE_MAX_AGE_SECONDS
         value: "60"
       - key: PORT
