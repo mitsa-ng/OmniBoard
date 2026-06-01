@@ -10,7 +10,7 @@ pub fn validate_sync_headers(headers: &HeaderMap, expected_token: &str) -> Resul
     validate_timestamp(headers, Utc::now().timestamp())
 }
 
-fn validate_authorization(headers: &HeaderMap, expected_token: &str) -> Result<(), ApiError> {
+pub fn validate_authorization(headers: &HeaderMap, expected_token: &str) -> Result<(), ApiError> {
     let value = headers
         .get(axum::http::header::AUTHORIZATION)
         .and_then(|value| value.to_str().ok())

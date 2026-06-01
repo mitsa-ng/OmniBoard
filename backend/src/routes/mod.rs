@@ -8,6 +8,7 @@ use sqlx::PgPool;
 
 use crate::config::Config;
 
+pub mod board;
 pub mod public;
 pub mod sync;
 
@@ -20,6 +21,7 @@ pub struct AppState {
 pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/health", get(|| async { "ok" }))
+        .route("/api/v1/board", get(board::board_handler))
         .route("/api/v1/sync", post(sync::sync_board_handler))
         .route("/api/v1/public/board", get(public::public_board_handler))
         .with_state(state)
