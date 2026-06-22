@@ -63,7 +63,7 @@ export const defaultBoard: BoardState = {
 };
 
 export const defaultSyncConfig: SyncConfig = {
-  apiBaseUrl: import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000/api/v1",
+  apiBaseUrl: import.meta.env.VITE_API_BASE_URL ?? "https://omniboard-o64i.onrender.com/api/v1",
   syncToken: "",
   startTime: "09:00",
   endTime: "18:00",

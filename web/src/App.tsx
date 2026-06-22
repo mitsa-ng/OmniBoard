@@ -1,3 +1,5 @@
+import { Analytics } from "@vercel/analytics/react";
+import { SpeedInsights } from "@vercel/speed-insights/react";
 import { AlertCircle, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
@@ -90,6 +92,8 @@ export default function App() {
       ) : null}
 
       {state.board ? <Board board={state.board} /> : <BoardSkeleton />}
+      <Analytics />
+      <SpeedInsights />
     </div>
   );
 }

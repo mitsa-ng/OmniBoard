@@ -1,5 +1,5 @@
-import { Check, Clock, GripVertical, Plus, RefreshCw, Settings, Trash2 } from "lucide-react";
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { Check, Clock, Download, GripVertical, Plus, RefreshCw, Settings, Trash2 } from "lucide-react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   createId,
@@ -14,7 +14,7 @@ import {
   type Task,
 } from "./domain";
 import { loadBoard, loadSyncConfig, saveBoard, saveSyncConfig } from "./storage";
-import { pushDirtyChanges } from "./sync";
+import { pushDirtyChanges, pullBoardFromServer } from "./sync";
 
 type DraftTask = {
   title: string;
@@ -27,6 +27,7 @@ export default function App() {
   const [board, setBoard] = useState<BoardState>(() => loadBoard());
   const [config, setConfig] = useState<SyncConfig>(() => loadSyncConfig());
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
+  const draggedTaskIdRef = useRef<string | null>(null);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [taskDrafts, setTaskDrafts] = useState<Record<string, DraftTask>>({});
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
@@ -34,6 +35,23 @@ export default function App() {
 
   useEffect(() => saveBoard(board), [board]);
   useEffect(() => saveSyncConfig(config), [config]);
+
+  useEffect(() => {
+    function preventDefault(event: DragEvent) {
+      event.preventDefault();
+    }
+    document.addEventListener("dragover", preventDefault);
+    document.addEventListener("drop", preventDefault);
+    return () => {
+      document.removeEventListener("dragover", preventDefault);
+      document.removeEventListener("drop", preventDefault);
+    };
+  }, []);
+
+  function setDraggedTaskIdWithRef(id: string | null) {
+    draggedTaskIdRef.current = id;
+    setDraggedTaskId(id);
+  }
 
   const sortedCategories = useMemo(
     () => [...board.categories].sort((a, b) => a.display_order - b.display_order),
@@ -55,6 +73,18 @@ export default function App() {
       setSyncStatus(error instanceof Error ? error.message : "Sync failed.");
     }
   }, [board, config]);
+
+  const runPull = useCallback(async () => {
+    setSyncStatus("Pulling...");
+    try {
+      const result = await pullBoardFromServer(config);
+      setBoard(result.board);
+      setConfig(result.config);
+      setSyncStatus(result.message);
+    } catch (error) {
+      setSyncStatus(error instanceof Error ? error.message : "Pull failed.");
+    }
+  }, [config]);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -196,20 +226,28 @@ export default function App() {
     }));
   }
 
-  function dropTask(categoryId: string, targetTaskId?: string) {
-    if (!draggedTaskId) {
+  function dropTask(categoryId: string, targetTaskId?: string, event?: React.DragEvent) {
+    const taskId =
+      event?.dataTransfer.getData("text") ||
+      draggedTaskIdRef.current;
+    if (!taskId) {
       return;
     }
 
     if (targetTaskId) {
-      // Dropped onto another task within the same category — reorder
       setBoard((current) => {
-        const draggedTask = current.tasks.find((t) => t.id === draggedTaskId);
+        const draggedTask = current.tasks.find((t) => t.id === taskId);
         const targetTask = current.tasks.find((t) => t.id === targetTaskId);
         if (!draggedTask || !targetTask) return current;
 
+        const now = currentUnixTimestamp();
+
+        const otherTasks = current.tasks.filter(
+          (t) => t.category_id !== categoryId && t.id !== taskId,
+        );
+
         const categoryTasks = current.tasks
-          .filter((t) => t.category_id === categoryId && t.id !== draggedTaskId)
+          .filter((t) => t.category_id === categoryId && t.id !== taskId)
           .sort((a, b) => a.display_order - b.display_order);
 
         const targetIndex = categoryTasks.findIndex((t) => t.id === targetTaskId);
@@ -217,22 +255,26 @@ export default function App() {
 
         categoryTasks.splice(insertAt, 0, { ...draggedTask, category_id: categoryId });
 
-        const now = currentUnixTimestamp();
+        const reordered = categoryTasks.map((t, i) => {
+          const wasDragged = t.id === taskId;
+          return {
+            ...t,
+            display_order: i,
+            category_id: categoryId,
+            updated_at: now,
+            is_dirty: wasDragged || t.is_dirty || t.display_order !== i,
+          };
+        });
+
         return {
           ...current,
-          tasks: categoryTasks.map((t, i) =>
-            t.id === draggedTaskId
-              ? { ...t, display_order: i, category_id: categoryId, updated_at: now, is_dirty: true }
-              : t.id === draggedTaskId || t.is_dirty || t.display_order !== i
-                ? { ...t, display_order: i, updated_at: now, is_dirty: true }
-                : t,
-          ),
+          tasks: [...otherTasks, ...reordered],
         };
       });
     } else {
-      setBoard((current) => moveTaskToCategory(current, draggedTaskId, categoryId));
+      setBoard((current) => moveTaskToCategory(current, taskId, categoryId));
     }
-    setDraggedTaskId(null);
+    setDraggedTaskIdWithRef(null);
   }
 
   return (
@@ -286,6 +328,13 @@ export default function App() {
             <RefreshCw size={16} />
             Sync now
           </button>
+          <div className="pull-section">
+            <button className="secondary-button" type="button" onClick={() => void runPull()}>
+              <Download size={16} />
+              Pull from DB
+            </button>
+            <span className="pull-hint">Replace local data with database</span>
+          </div>
           <p className="status-line">{syncStatus}</p>
         </section>
 
@@ -338,12 +387,14 @@ export default function App() {
               isFirst={index === 0}
               isLast={index === sortedCategories.length - 1}
               editingTaskId={editingTaskId}
+              draggedTaskId={draggedTaskId}
               onRenameCategory={renameCategory}
               onDeleteCategory={deleteCategory}
               onMoveCategory={moveCategory}
               onDraftChange={(draft) => setTaskDrafts((current) => ({ ...current, [category.id]: draft }))}
               onAddTask={addTask}
-              onTaskDragStart={setDraggedTaskId}
+              onTaskDragStart={setDraggedTaskIdWithRef}
+              onTaskDragEnd={() => setDraggedTaskIdWithRef(null)}
               onDropTask={dropTask}
               onEditTask={setEditingTaskId}
               onUpdateTask={updateTask}
@@ -364,13 +415,15 @@ type CategoryColumnProps = {
   isFirst: boolean;
   isLast: boolean;
   editingTaskId: string | null;
+  draggedTaskId: string | null;
   onRenameCategory: (categoryId: string, name: string) => void;
   onDeleteCategory: (categoryId: string) => void;
   onMoveCategory: (categoryId: string, direction: -1 | 1) => void;
   onDraftChange: (draft: DraftTask) => void;
   onAddTask: (categoryId: string, event: FormEvent) => void;
   onTaskDragStart: (taskId: string) => void;
-  onDropTask: (categoryId: string, targetTaskId?: string) => void;
+  onTaskDragEnd: () => void;
+  onDropTask: (categoryId: string, targetTaskId?: string, event?: React.DragEvent) => void;
   onEditTask: (taskId: string | null) => void;
   onUpdateTask: (taskId: string, patch: Partial<Pick<Task, "title" | "notes">>) => void;
   onUpdateTaskDisplayOrder: (taskId: string, display_order: number) => void;
@@ -384,12 +437,14 @@ function CategoryColumn({
   isFirst,
   isLast,
   editingTaskId,
+  draggedTaskId,
   onRenameCategory,
   onDeleteCategory,
   onMoveCategory,
   onDraftChange,
   onAddTask,
   onTaskDragStart,
+  onTaskDragEnd,
   onDropTask,
   onEditTask,
   onUpdateTask,
@@ -401,8 +456,37 @@ function CategoryColumn({
     [tasks],
   );
 
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [overTaskId, setOverTaskId] = useState<string | null>(null);
+
+  function resetDragOver() {
+    setIsDragOver(false);
+    setOverTaskId(null);
+  }
+
   return (
-    <section className="column" onDragOver={(event) => event.preventDefault()} onDrop={() => onDropTask(category.id)}>
+    <section
+      className={`column${isDragOver ? " column--drag-over" : ""}`}
+      onDragOver={(event) => {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "move";
+      }}
+      onDragEnter={(event) => {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "move";
+        setIsDragOver(true);
+      }}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node)) {
+          resetDragOver();
+        }
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        resetDragOver();
+        onDropTask(category.id, undefined, event);
+      }}
+    >
       <header className="column-header">
         <GripVertical size={16} />
         <input value={category.name} onChange={(event) => onRenameCategory(category.id, event.target.value)} />
@@ -438,71 +522,100 @@ function CategoryColumn({
 
       <div className="task-list">
         {sortedTasks.length === 0 ? <div className="empty-column">拖拽任务到这里</div> : null}
-        {sortedTasks.map((task) => (
-          <article
-            className={`task-card ${task.is_dirty ? "task-card--dirty" : ""}`}
-            draggable
-            key={task.id}
-            onDragStart={() => {
-              onTaskDragStart(task.id);
-            }}
-            onDragOver={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-            }}
-            onDrop={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              onDropTask(category.id, task.id);
-            }}
-          >
-            {editingTaskId === task.id ? (
-              <div className="edit-task">
-                <input value={task.title} onChange={(event) => onUpdateTask(task.id, { title: event.target.value })} />
-                <textarea value={task.notes} onChange={(event) => onUpdateTask(task.id, { notes: event.target.value })} />
-                <div className="edit-task-actions">
-                  <button type="button" onClick={() => onEditTask(null)}>
-                    <Check size={15} />
-                    Done
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <>
-                <div className="task-card-header">
-                  <h3>{task.title}</h3>
-                  <div className="task-card-header-actions">
-                    <span className="order-input-wrap">
-                      <input
-                        type="number"
-                        className="order-input"
-                        value={task.display_order}
-                        min={0}
-                        onChange={(event) => {
-                          const val = parseInt(event.target.value, 10);
-                          if (!isNaN(val)) {
-                            onUpdateTaskDisplayOrder(task.id, val);
-                          }
-                        }}
-                        aria-label="Sequence order"
-                      />
-                    </span>
-                    <button type="button" onClick={() => onDeleteTask(task.id)}>
-                      <Trash2 size={15} />
+        {sortedTasks.map((task) => {
+          const classNames = [
+            "task-card",
+            task.is_dirty ? "task-card--dirty" : "",
+            draggedTaskId === task.id ? "task-card--dragging" : "",
+            overTaskId === task.id ? "task-card--drag-target" : "",
+          ]
+            .filter(Boolean)
+            .join(" ");
+
+          return (
+            <article
+              className={classNames}
+              draggable
+              key={task.id}
+              onDragStart={(event) => {
+                event.dataTransfer.effectAllowed = "move";
+                event.dataTransfer.setData("text", task.id);
+                onTaskDragStart(task.id);
+              }}
+              onDragEnter={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                setOverTaskId(task.id);
+              }}
+              onDragOver={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                event.dataTransfer.dropEffect = "move";
+              }}
+              onDragLeave={(event) => {
+                event.stopPropagation();
+                if (!event.currentTarget.contains(event.relatedTarget as Node)) {
+                  setOverTaskId(null);
+                }
+              }}
+              onDragEnd={() => {
+                onTaskDragEnd();
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                resetDragOver();
+                onDropTask(category.id, task.id, event);
+              }}
+            >
+              {editingTaskId === task.id ? (
+                <div className="edit-task">
+                  <input value={task.title} onChange={(event) => onUpdateTask(task.id, { title: event.target.value })} />
+                  <textarea value={task.notes} onChange={(event) => onUpdateTask(task.id, { notes: event.target.value })} />
+                  <div className="edit-task-actions">
+                    <button type="button" onClick={() => onEditTask(null)}>
+                      <Check size={15} />
+                      Done
                     </button>
                   </div>
                 </div>
-                <p>{task.notes || "No notes"}</p>
-                <footer>
-                  <span>{task.is_dirty ? "Pending sync" : "Synced"}</span>
-                  <button type="button" onClick={() => onEditTask(task.id)}>
-                    Edit
-                  </button>
-                </footer>
-              </>
-            )}
-          </article>
-        ))}
+              ) : (
+                <>
+                  <div className="task-card-header">
+                    <h3>{task.title}</h3>
+                    <div className="task-card-header-actions">
+                      <span className="order-input-wrap">
+                        <input
+                          type="number"
+                          className="order-input"
+                          value={task.display_order}
+                          min={0}
+                          onChange={(event) => {
+                            const val = parseInt(event.target.value, 10);
+                            if (!isNaN(val)) {
+                              onUpdateTaskDisplayOrder(task.id, val);
+                            }
+                          }}
+                          aria-label="Sequence order"
+                        />
+                      </span>
+                      <button type="button" onClick={() => onDeleteTask(task.id)}>
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  </div>
+                  <p>{task.notes || "No notes"}</p>
+                  <footer>
+                    <span>{task.is_dirty ? "Pending sync" : "Synced"}</span>
+                    <button type="button" onClick={() => onEditTask(task.id)}>
+                      Edit
+                    </button>
+                  </footer>
+                </>
+              )}
+            </article>
+          );
+        })}
       </div>
     </section>
   );

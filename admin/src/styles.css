@@ -132,6 +132,24 @@ p {
   justify-content: center;
 }
 
+.secondary-button {
+  background: #ffffff;
+  border-color: #c9d3df;
+  justify-content: center;
+}
+
+.pull-section {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.pull-hint {
+  color: #64788d;
+  font-size: 0.76rem;
+  line-height: 1.2;
+}
+
 .status-line {
   color: #51677e;
   font-size: 0.86rem;
@@ -266,6 +284,22 @@ p {
 
 .task-card--dirty {
   border-left-color: #c2410c;
+}
+
+.task-card--dragging {
+  opacity: 0.4;
+}
+
+.task-card--drag-target {
+  border-color: #3b82f6;
+  border-left-color: #3b82f6;
+  background: #eff6ff;
+}
+
+.column--drag-over {
+  background: #dce4ed;
+  border-color: #8ba2bb;
+  outline: 2px dashed #7a8fa3;
 }
 
 .task-card-header {
