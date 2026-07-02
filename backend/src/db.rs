@@ -5,9 +5,9 @@ use crate::{
     models::{Category, PublicBoardResponse, SyncRequestPayload, Task},
 };
 
-pub async fn create_pool(database_url: &str) -> Result<PgPool, ApiError> {
+pub async fn create_pool(database_url: &str, max_connections: u32) -> Result<PgPool, ApiError> {
     PgPoolOptions::new()
-        .max_connections(5)
+        .max_connections(max_connections)
         .connect(database_url)
         .await
         .map_err(ApiError::Database)

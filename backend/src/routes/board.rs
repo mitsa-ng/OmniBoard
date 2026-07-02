@@ -1,8 +1,6 @@
 use axum::{extract::State, http::HeaderMap, response::IntoResponse, Json};
 
-use crate::{
-    auth::validate_authorization, db, error::ApiError, routes::AppState,
-};
+use crate::{auth::validate_authorization, db, error::ApiError, routes::AppState};
 
 pub async fn board_handler(
     State(state): State<AppState>,

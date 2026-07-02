@@ -7,11 +7,11 @@ mod routes;
 
 use std::sync::Arc;
 
-use axum::http::{HeaderValue, Method};
+use axum::http::{header, HeaderName, HeaderValue, Method};
 use config::Config;
 use error::ApiError;
 use routes::AppState;
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::CorsLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
@@ -26,7 +26,7 @@ async fn main() -> Result<(), ApiError> {
         .init();
 
     let config = Arc::new(Config::from_env()?);
-    let pool = db::create_pool(&config.database_url).await?;
+    let pool = db::create_pool(&config.database_url, config.db_max_connections).await?;
     db::run_migrations(&pool).await?;
 
     let allowed_origins = config
@@ -41,7 +41,11 @@ async fn main() -> Result<(), ApiError> {
 
     let cors = CorsLayer::new()
         .allow_methods([Method::GET, Method::POST])
-        .allow_headers(Any)
+        .allow_headers([
+            header::AUTHORIZATION,
+            header::CONTENT_TYPE,
+            HeaderName::from_static("x-client-timestamp"),
+        ])
         .allow_origin(allowed_origins);
 
     let app = routes::router(AppState {

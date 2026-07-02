@@ -33,7 +33,7 @@ Or create a **Web Service** manually:
 
 - **Runtime**: Docker
 - **Repository**: your GitHub repo
-- **Dockerfile path**: `./backend/Dockerfile`
+- **Dockerfile path**: `./Dockerfile` (repository root; it builds the `backend/` crate)
 
 Set environment variables in Render dashboard:
 
@@ -115,6 +115,7 @@ curl -i -X POST https://<your-render-app.onrender.com>/api/v1/sync \
         "title": "撰写产品企划书",
         "notes": "包含市场调查与报价",
         "category_id": "cat_todo",
+        "display_order": 0,
         "updated_at": 1717100300
       }
     ]
@@ -131,8 +132,9 @@ Refresh the Vercel site and confirm the task appears.
 |---|---|---|
 | `DATABASE_URL` | ✅ | PostgreSQL connection string |
 | `SYNC_API_KEY` | ✅ | Strong random secret for sync auth |
-| `ALLOWED_WEB_ORIGIN` | ❌ | Comma-separated CORS origins (default: localhost) |
+| `ALLOWED_WEB_ORIGIN` | ❌ | Comma-separated CORS origins (default: localhost). Must be customized per deployment — the values in `render.yaml` are examples. |
 | `PUBLIC_CACHE_MAX_AGE_SECONDS` | ❌ | Public API Cache-Control max-age (default: 60) |
+| `DB_MAX_CONNECTIONS` | ❌ | Max PostgreSQL pool connections (default: 10) |
 | `PORT` | ❌ | Server port (default: 3000) |
 | `RUST_LOG` | ❌ | Logging level (default: info) |
 

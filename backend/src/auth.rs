@@ -1,5 +1,6 @@
 use axum::http::HeaderMap;
 use chrono::Utc;
+use subtle::ConstantTimeEq;
 
 use crate::error::ApiError;
 
@@ -21,7 +22,7 @@ pub fn validate_authorization(headers: &HeaderMap, expected_token: &str) -> Resu
         .filter(|token| !token.is_empty())
         .ok_or(ApiError::MissingAuthorization)?;
 
-    if token == expected_token {
+    if token.as_bytes().ct_eq(expected_token.as_bytes()).into() {
         Ok(())
     } else {
         Err(ApiError::InvalidToken)

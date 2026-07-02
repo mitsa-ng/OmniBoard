@@ -74,6 +74,63 @@ export function currentUnixTimestamp(date = new Date()) {
   return Math.floor(date.getTime() / 1000);
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+export function isServerCategory(value: unknown): value is Omit<Category, "is_dirty"> {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.name === "string" &&
+    typeof value.display_order === "number" &&
+    typeof value.updated_at === "number"
+  );
+}
+
+export function isServerTask(value: unknown): value is Omit<Task, "is_dirty"> {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.title === "string" &&
+    typeof value.notes === "string" &&
+    typeof value.category_id === "string" &&
+    typeof value.display_order === "number" &&
+    typeof value.updated_at === "number"
+  );
+}
+
+export function isServerBoard(
+  value: unknown,
+): value is { categories: Omit<Category, "is_dirty">[]; tasks: Omit<Task, "is_dirty">[] } {
+  return (
+    isRecord(value) &&
+    Array.isArray(value.categories) &&
+    value.categories.every(isServerCategory) &&
+    Array.isArray(value.tasks) &&
+    value.tasks.every(isServerTask)
+  );
+}
+
+export function isBoardState(value: unknown): value is BoardState {
+  return (
+    isServerBoard(value) &&
+    value.categories.every((category) => typeof (category as Category).is_dirty === "boolean") &&
+    value.tasks.every((task) => typeof (task as Task).is_dirty === "boolean")
+  );
+}
+
+export function isSyncConfig(value: unknown): value is SyncConfig {
+  return (
+    isRecord(value) &&
+    typeof value.apiBaseUrl === "string" &&
+    typeof value.syncToken === "string" &&
+    typeof value.startTime === "string" &&
+    typeof value.endTime === "string" &&
+    (value.lastSyncTimestamp === null || typeof value.lastSyncTimestamp === "number")
+  );
+}
+
 export function createId(prefix: string) {
   const randomId =
     typeof crypto !== "undefined" && "randomUUID" in crypto

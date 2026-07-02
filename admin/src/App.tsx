@@ -1,5 +1,5 @@
-import { Check, Clock, Download, GripVertical, Plus, RefreshCw, Settings, Trash2 } from "lucide-react";
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Check, Clock, Download, GripVertical, Plus, RefreshCw, Settings, SlidersHorizontal, Trash2 } from "lucide-react";
+import { FormEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   createId,
@@ -22,6 +22,7 @@ type DraftTask = {
 };
 
 const emptyDraft: DraftTask = { title: "", notes: "" };
+const noTasks: Task[] = [];
 
 export default function App() {
   const [board, setBoard] = useState<BoardState>(() => loadBoard());
@@ -32,6 +33,9 @@ export default function App() {
   const [taskDrafts, setTaskDrafts] = useState<Record<string, DraftTask>>({});
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [syncStatus, setSyncStatus] = useState("Ready");
+  const [isBusy, setIsBusy] = useState(false);
+  const [showSidebarPanels, setShowSidebarPanels] = useState(false);
+  const busyRef = useRef(false);
 
   useEffect(() => saveBoard(board), [board]);
   useEffect(() => saveSyncConfig(config), [config]);
@@ -48,21 +52,39 @@ export default function App() {
     };
   }, []);
 
-  function setDraggedTaskIdWithRef(id: string | null) {
+  const setDraggedTaskIdWithRef = useCallback((id: string | null) => {
     draggedTaskIdRef.current = id;
     setDraggedTaskId(id);
-  }
+  }, []);
 
   const sortedCategories = useMemo(
     () => [...board.categories].sort((a, b) => a.display_order - b.display_order),
     [board.categories],
   );
 
+  const tasksByCategory = useMemo(() => {
+    const groups = new Map<string, Task[]>();
+    for (const task of board.tasks) {
+      const group = groups.get(task.category_id);
+      if (group) {
+        group.push(task);
+      } else {
+        groups.set(task.category_id, [task]);
+      }
+    }
+    return groups;
+  }, [board.tasks]);
+
   const dirtyCount =
     board.categories.filter((category) => category.is_dirty).length +
     board.tasks.filter((task) => task.is_dirty).length;
 
   const runSync = useCallback(async () => {
+    if (busyRef.current) {
+      return;
+    }
+    busyRef.current = true;
+    setIsBusy(true);
     setSyncStatus("Syncing...");
     try {
       const result = await pushDirtyChanges(board, config);
@@ -71,10 +93,18 @@ export default function App() {
       setSyncStatus(result.message);
     } catch (error) {
       setSyncStatus(error instanceof Error ? error.message : "Sync failed.");
+    } finally {
+      busyRef.current = false;
+      setIsBusy(false);
     }
   }, [board, config]);
 
   const runPull = useCallback(async () => {
+    if (busyRef.current) {
+      return;
+    }
+    busyRef.current = true;
+    setIsBusy(true);
     setSyncStatus("Pulling...");
     try {
       const result = await pullBoardFromServer(config);
@@ -83,6 +113,9 @@ export default function App() {
       setSyncStatus(result.message);
     } catch (error) {
       setSyncStatus(error instanceof Error ? error.message : "Pull failed.");
+    } finally {
+      busyRef.current = false;
+      setIsBusy(false);
     }
   }, [config]);
 
@@ -124,7 +157,7 @@ export default function App() {
     setNewCategoryName("");
   }
 
-  function renameCategory(categoryId: string, name: string) {
+  const renameCategory = useCallback((categoryId: string, name: string) => {
     setBoard((current) => ({
       ...current,
       categories: current.categories.map((category) =>
@@ -133,9 +166,9 @@ export default function App() {
           : category,
       ),
     }));
-  }
+  }, []);
 
-  function deleteCategory(categoryId: string) {
+  const deleteCategory = useCallback((categoryId: string) => {
     setBoard((current) => ({
       categories: current.categories
         .filter((category) => category.id !== categoryId)
@@ -147,9 +180,9 @@ export default function App() {
         })),
       tasks: current.tasks.filter((task) => task.category_id !== categoryId),
     }));
-  }
+  }, []);
 
-  function moveCategory(categoryId: string, direction: -1 | 1) {
+  const moveCategory = useCallback((categoryId: string, direction: -1 | 1) => {
     setBoard((current) => {
       const ordered = [...current.categories].sort((a, b) => a.display_order - b.display_order);
       const index = ordered.findIndex((category) => category.id === categoryId);
@@ -169,15 +202,16 @@ export default function App() {
         })),
       };
     });
-  }
+  }, []);
 
-  function addTask(categoryId: string, event: FormEvent) {
-    event.preventDefault();
-    const draft = taskDrafts[categoryId] ?? emptyDraft;
-    const title = draft.title.trim();
-    if (!title) {
-      return;
-    }
+  const addTask = useCallback(
+    (categoryId: string, event: FormEvent) => {
+      event.preventDefault();
+      const draft = taskDrafts[categoryId] ?? emptyDraft;
+      const title = draft.title.trim();
+      if (!title) {
+        return;
+      }
 
     setBoard((current) => {
       const categoryTasks = current.tasks.filter((t) => t.category_id === categoryId);
@@ -199,34 +233,44 @@ export default function App() {
       };
     });
     setTaskDrafts((current) => ({ ...current, [categoryId]: emptyDraft }));
-  }
+    },
+    [taskDrafts],
+  );
 
-  function updateTask(taskId: string, patch: Partial<Pick<Task, "title" | "notes">>) {
+  const updateTask = useCallback((taskId: string, patch: Partial<Pick<Task, "title" | "notes">>) => {
     setBoard((current) => ({
       ...current,
       tasks: current.tasks.map((task) =>
         task.id === taskId ? { ...task, ...patch, updated_at: currentUnixTimestamp(), is_dirty: true } : task,
       ),
     }));
-  }
+  }, []);
 
-  function updateTaskDisplayOrder(taskId: string, display_order: number) {
+  const updateTaskDisplayOrder = useCallback((taskId: string, display_order: number) => {
     setBoard((current) => ({
       ...current,
       tasks: current.tasks.map((task) =>
         task.id === taskId ? { ...task, display_order, updated_at: currentUnixTimestamp(), is_dirty: true } : task,
       ),
     }));
-  }
+  }, []);
 
-  function deleteTask(taskId: string) {
+  const deleteTask = useCallback((taskId: string) => {
     setBoard((current) => ({
       ...current,
       tasks: current.tasks.filter((task) => task.id !== taskId),
     }));
-  }
+  }, []);
 
-  function dropTask(categoryId: string, targetTaskId?: string, event?: React.DragEvent) {
+  const handleDraftChange = useCallback((categoryId: string, draft: DraftTask) => {
+    setTaskDrafts((current) => ({ ...current, [categoryId]: draft }));
+  }, []);
+
+  const handleTaskDragEnd = useCallback(() => {
+    setDraggedTaskIdWithRef(null);
+  }, [setDraggedTaskIdWithRef]);
+
+  const dropTask = useCallback((categoryId: string, targetTaskId?: string, event?: React.DragEvent) => {
     const taskId =
       event?.dataTransfer.getData("text") ||
       draggedTaskIdRef.current;
@@ -275,16 +319,28 @@ export default function App() {
       setBoard((current) => moveTaskToCategory(current, taskId, categoryId));
     }
     setDraggedTaskIdWithRef(null);
-  }
+  }, [setDraggedTaskIdWithRef]);
 
   return (
     <div className="admin-shell">
       <aside className="sidebar">
-        <div>
-          <p className="label">OmniBoard</p>
-          <h1>管理客户端</h1>
+        <div className="sidebar-brand">
+          <div>
+            <p className="label">OmniBoard</p>
+            <h1>管理客户端</h1>
+          </div>
+          <button
+            className="sidebar-toggle"
+            type="button"
+            aria-expanded={showSidebarPanels}
+            onClick={() => setShowSidebarPanels((current) => !current)}
+          >
+            <SlidersHorizontal size={16} />
+            {showSidebarPanels ? "收起面板" : "同步与状态"}
+          </button>
         </div>
 
+        <div className={`sidebar-panels${showSidebarPanels ? " sidebar-panels--open" : ""}`}>
         <section className="panel">
           <div className="panel-title">
             <Settings size={17} />
@@ -324,18 +380,18 @@ export default function App() {
               />
             </label>
           </div>
-          <button className="primary-button" type="button" onClick={() => void runSync()}>
+          <button className="primary-button" type="button" disabled={isBusy} onClick={() => void runSync()}>
             <RefreshCw size={16} />
-            Sync now
+            {isBusy ? "Working..." : "Sync now"}
           </button>
           <div className="pull-section">
-            <button className="secondary-button" type="button" onClick={() => void runPull()}>
+            <button className="secondary-button" type="button" disabled={isBusy} onClick={() => void runPull()}>
               <Download size={16} />
               Pull from DB
             </button>
             <span className="pull-hint">Replace local data with database</span>
           </div>
-          <p className="status-line">{syncStatus}</p>
+          <p className="status-line" role="status">{syncStatus}</p>
         </section>
 
         <section className="panel">
@@ -356,6 +412,7 @@ export default function App() {
             <strong>{isNowInSyncWindow(new Date(), config.startTime, config.endTime) ? "Open" : "Closed"}</strong>
           </div>
         </section>
+        </div>
       </aside>
 
       <main className="workspace">
@@ -382,7 +439,7 @@ export default function App() {
             <CategoryColumn
               key={category.id}
               category={category}
-              tasks={board.tasks.filter((task) => task.category_id === category.id)}
+              tasks={tasksByCategory.get(category.id) ?? noTasks}
               draft={taskDrafts[category.id] ?? emptyDraft}
               isFirst={index === 0}
               isLast={index === sortedCategories.length - 1}
@@ -391,10 +448,10 @@ export default function App() {
               onRenameCategory={renameCategory}
               onDeleteCategory={deleteCategory}
               onMoveCategory={moveCategory}
-              onDraftChange={(draft) => setTaskDrafts((current) => ({ ...current, [category.id]: draft }))}
+              onDraftChange={handleDraftChange}
               onAddTask={addTask}
               onTaskDragStart={setDraggedTaskIdWithRef}
-              onTaskDragEnd={() => setDraggedTaskIdWithRef(null)}
+              onTaskDragEnd={handleTaskDragEnd}
               onDropTask={dropTask}
               onEditTask={setEditingTaskId}
               onUpdateTask={updateTask}
@@ -419,7 +476,7 @@ type CategoryColumnProps = {
   onRenameCategory: (categoryId: string, name: string) => void;
   onDeleteCategory: (categoryId: string) => void;
   onMoveCategory: (categoryId: string, direction: -1 | 1) => void;
-  onDraftChange: (draft: DraftTask) => void;
+  onDraftChange: (categoryId: string, draft: DraftTask) => void;
   onAddTask: (categoryId: string, event: FormEvent) => void;
   onTaskDragStart: (taskId: string) => void;
   onTaskDragEnd: () => void;
@@ -430,7 +487,7 @@ type CategoryColumnProps = {
   onDeleteTask: (taskId: string) => void;
 };
 
-function CategoryColumn({
+const CategoryColumn = memo(function CategoryColumn({
   category,
   tasks,
   draft,
@@ -506,12 +563,12 @@ function CategoryColumn({
       <form className="task-form" onSubmit={(event) => onAddTask(category.id, event)}>
         <input
           value={draft.title}
-          onChange={(event) => onDraftChange({ ...draft, title: event.target.value })}
+          onChange={(event) => onDraftChange(category.id, { ...draft, title: event.target.value })}
           placeholder="任务标题"
         />
         <textarea
           value={draft.notes}
-          onChange={(event) => onDraftChange({ ...draft, notes: event.target.value })}
+          onChange={(event) => onDraftChange(category.id, { ...draft, notes: event.target.value })}
           placeholder="任务注记"
         />
         <button type="submit">
@@ -619,7 +676,7 @@ function CategoryColumn({
       </div>
     </section>
   );
-}
+});
 
 function formatDate(unixSeconds: number) {
   return new Intl.DateTimeFormat(undefined, {

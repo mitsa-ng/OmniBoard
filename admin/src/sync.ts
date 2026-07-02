@@ -1,4 +1,4 @@
-import { buildSyncPayload, clearDirtyFlags, currentUnixTimestamp, hasDirtyChanges, type BoardState, type Category, type Task, type SyncConfig } from "./domain";
+import { buildSyncPayload, clearDirtyFlags, currentUnixTimestamp, hasDirtyChanges, isServerBoard, type BoardState, type Category, type Task, type SyncConfig } from "./domain";
 
 export type SyncResult = {
   board: BoardState;
@@ -29,7 +29,11 @@ export async function pullBoardFromServer(config: SyncConfig): Promise<SyncResul
     throw new Error(`Pull failed with ${response.status}.`);
   }
 
-  const data = await response.json();
+  const data: unknown = await response.json();
+  if (!isServerBoard(data)) {
+    throw new Error("Pull failed: server returned an unexpected payload.");
+  }
+
   const syncedAt = currentUnixTimestamp();
   return {
     board: normalizeBoard(data),

@@ -10,6 +10,7 @@ pub async fn sync_board_handler(
     axum::Json(payload): axum::Json<SyncRequestPayload>,
 ) -> Result<&'static str, ApiError> {
     validate_sync_headers(&headers, &state.config.sync_api_key)?;
+    payload.validate().map_err(ApiError::Validation)?;
     db::sync_board(&state.pool, &payload).await?;
     Ok("Data Synchronized Successfully")
 }

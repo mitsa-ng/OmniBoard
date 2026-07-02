@@ -9,12 +9,15 @@ RUN cargo build --release
 FROM debian:bookworm-slim
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates \
+  && apt-get install -y --no-install-recommends ca-certificates curl \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY --from=builder /app/target/release/omniboard-backend /usr/local/bin/omniboard-backend
 COPY --from=builder /app/migrations ./migrations
+
+RUN useradd --system --no-create-home omniboard
+USER omniboard
 
 ENV PORT=3000
 EXPOSE 3000

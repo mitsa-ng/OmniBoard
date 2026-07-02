@@ -1,33 +1,58 @@
-import { defaultBoard, defaultSyncConfig, type BoardState, type SyncConfig } from "./domain";
+import {
+  defaultBoard,
+  defaultSyncConfig,
+  isBoardState,
+  isSyncConfig,
+  type BoardState,
+  type SyncConfig,
+} from "./domain";
 
 const boardStorageKey = "omniboard.admin.board";
 const configStorageKey = "omniboard.admin.syncConfig";
+const storageVersion = 1;
 
 export function loadBoard(): BoardState {
-  return readJson(boardStorageKey, defaultBoard);
+  const value = readStored(boardStorageKey);
+  return isBoardState(value) ? value : defaultBoard;
 }
 
 export function saveBoard(board: BoardState) {
-  localStorage.setItem(boardStorageKey, JSON.stringify(board));
+  writeStored(boardStorageKey, board);
 }
 
 export function loadSyncConfig(): SyncConfig {
-  return readJson(configStorageKey, defaultSyncConfig);
+  const value = readStored(configStorageKey);
+  return isSyncConfig(value) ? value : defaultSyncConfig;
 }
 
 export function saveSyncConfig(config: SyncConfig) {
-  localStorage.setItem(configStorageKey, JSON.stringify(config));
+  writeStored(configStorageKey, config);
 }
 
-function readJson<T>(key: string, fallback: T): T {
+function writeStored(key: string, data: unknown) {
+  localStorage.setItem(key, JSON.stringify({ version: storageVersion, data }));
+}
+
+// Unwraps the versioned envelope; data saved before versioning was introduced
+// is returned as-is so existing installs migrate on their next save.
+function readStored(key: string): unknown {
   const rawValue = localStorage.getItem(key);
   if (!rawValue) {
-    return fallback;
+    return null;
   }
 
   try {
-    return JSON.parse(rawValue) as T;
+    const parsed: unknown = JSON.parse(rawValue);
+    if (
+      typeof parsed === "object" &&
+      parsed !== null &&
+      "version" in parsed &&
+      "data" in parsed
+    ) {
+      return (parsed as { data: unknown }).data;
+    }
+    return parsed;
   } catch {
-    return fallback;
+    return null;
   }
 }

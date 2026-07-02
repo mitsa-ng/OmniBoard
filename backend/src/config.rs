@@ -8,6 +8,7 @@ pub struct Config {
     pub sync_api_key: String,
     pub allowed_web_origins: Vec<String>,
     pub public_cache_max_age_seconds: u64,
+    pub db_max_connections: u32,
     pub bind_addr: SocketAddr,
 }
 
@@ -29,6 +30,10 @@ impl Config {
             .ok()
             .and_then(|value| value.parse::<u64>().ok())
             .unwrap_or(60);
+        let db_max_connections = env::var("DB_MAX_CONNECTIONS")
+            .ok()
+            .and_then(|value| value.parse::<u32>().ok())
+            .unwrap_or(10);
         let port = env::var("PORT")
             .ok()
             .and_then(|value| value.parse::<u16>().ok())
@@ -40,6 +45,7 @@ impl Config {
             sync_api_key,
             allowed_web_origins,
             public_cache_max_age_seconds,
+            db_max_connections,
             bind_addr,
         })
     }
